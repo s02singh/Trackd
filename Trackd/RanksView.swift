@@ -6,7 +6,10 @@ struct TrackDisplay {
     var trackInfo: TrackInfo
     var documentID: String
     var userVotes: [String: Int] // Dictionary to store user votes
+    var userPosted: String // User who posted the track
+    var username: String
 }
+
 
 struct RanksView: View {
     @State private var trackDisplays: [TrackDisplay] = []
@@ -15,14 +18,27 @@ struct RanksView: View {
     @EnvironmentObject var spotifyManager: HomeViewModel
     @State var lastPlayed: String = " "
     @State var isPlaying: Bool = false
+    @State var loadingTheme: Bool = true
+    @State var fetching: Bool = false
 
     var body: some View {
         VStack {
-            LinearGradientText(text: spotifyManager.dailyTheme)
+            if loadingTheme{
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+                    .onAppear() {
+                        while(spotifyManager.dailyTheme == ""){}
+                        loadingTheme = false
+                    }
+            }
+            else{
+                LinearGradientText(text: spotifyManager.dailyTheme)
                     .font(.custom("AvenirNext-DemiBold", size: 50))
                     .fontWeight(.bold)
                     .padding(.vertical, 12)
                     .padding(.horizontal, 24)
+            }
+            
             
             Picker(selection: $selection, label: Text("")) {
                 Text("Trending").tag(0)
@@ -33,20 +49,28 @@ struct RanksView: View {
             .onChange(of: selection) { _ in
                 fetchTracks() // Call fetchTracks() when the selection changes
             }
-
-            List(trackDisplays.indices, id: \.self) { index in
-                TrackRow(trackDisplay: trackDisplays[index], upvoteAction: {
-                    upvoteTrack(index: index)
-                }, downvoteAction: {
-                    downvoteTrack(index: index)
+            
+            if fetching{
+                Spacer()
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+                Spacer()
+            }
+            else{
+                List(trackDisplays.indices, id: \.self) { index in
+                    TrackRow(trackDisplay: trackDisplays[index], upvoteAction: {
+                        upvoteTrack(index: index)
+                    }, downvoteAction: {
+                        downvoteTrack(index: index)
+                    }
+                             , isPlaying: $isPlaying
+                             , lastPlayed: $lastPlayed
+                             , trackDisplays: $trackDisplays
+                             
+                    )
+                    .environmentObject(authManager)
+                    .environmentObject(spotifyManager)
                 }
-                         , isPlaying: $isPlaying
-                         , lastPlayed: $lastPlayed
-                         , trackDisplays: $trackDisplays
-                        
-                )
-                .environmentObject(authManager)
-                .environmentObject(spotifyManager)
             }
         }
         .onAppear {
@@ -55,54 +79,83 @@ struct RanksView: View {
     }
 
     func fetchTracks() {
-        let collection = Firestore.firestore().collection("dailySubmissions")
-        var query: Query
+            let collection = Firestore.firestore().collection("dailySubmissions")
+            var query: Query
 
-        if selection == 0 {
-            // Trending: Query based on score, descending
-            query = collection.order(by: "score", descending: true).limit(to: 10)
-        } else {
-            // New: Query based on timestamp, descending
-            query = collection.order(by: "timestamp", descending: true).limit(to: 10)
+            if selection == 0 {
+                // Trending: Query based on score, descending
+                query = collection.order(by: "score", descending: true).limit(to: 10)
+            } else {
+                // New: Query based on timestamp, descending
+                query = collection.order(by: "timestamp", descending: true).limit(to: 10)
+            }
+
+            query.getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error fetching tracks: \(error)")
+                    return
+                }
+
+                guard let documents = snapshot?.documents else {
+                    print("No tracks found")
+                    return
+                }
+
+                // Parse documents into TrackDisplay objects
+                trackDisplays = documents.compactMap { document in
+                    do {
+                        if let submissionString = document.data()["submission"] as? String,
+                           let jsonData = submissionString.data(using: .utf8),
+                           
+                           let firebaseTrackInfo = try? JSONDecoder().decode(FirebaseTrackInfo.self, from: jsonData),
+                           let userPosted = document.data()["userPosted"] as? String,
+                           let username = document.data()["username"] as? String
+                        {
+                            let trackInfo = TrackInfo(name: firebaseTrackInfo.name,
+                                                      artist: firebaseTrackInfo.artist,
+                                                      previewUrl: firebaseTrackInfo.previewUrl.flatMap { URL(string: $0) },
+                                                      coverUrl: firebaseTrackInfo.coverUrl.flatMap { URL(string: $0) },
+                                                      score: document.data()["score"] as? Int ?? 0,
+                                                      URI: document.data()["uri"] as? String ?? "")
+
+                            // Check if the current user has upvoted or downvoted this track
+                            _ = authManager.userID ?? ""
+                            let userVotes = document.data()["userVotes"] as? [String: Int] ?? [:]
+
+                            return TrackDisplay(trackInfo: trackInfo, documentID: document.documentID, userVotes: userVotes, userPosted: userPosted, username: username)
+                        }
+                    } catch {
+                        print("Error parsing track: \(error)")
+                    }
+                    return nil
+                }
+            }
         }
 
-        query.getDocuments { snapshot, error in
+
+    func fetchUsername(userID: String, completion: @escaping (String) -> Void) {
+        Firestore.firestore().collection("users").document(userID).getDocument { snapshot, error in
             if let error = error {
-                print("Error fetching tracks: \(error)")
+                print("Error fetching username: \(error)")
+                completion("Unknown User") // Default to "Unknown User" if error occurs
                 return
             }
 
-            guard let documents = snapshot?.documents else {
-                print("No tracks found")
+            guard let document = snapshot else {
+                print("No user document found")
+                completion("Unknown User") // Default to "Unknown User" if document not found
                 return
             }
 
-            // Parse documents into TrackDisplay objects
-            trackDisplays = documents.compactMap { document in
-                do {
-                    if let submissionString = document.data()["submission"] as? String,
-                       let jsonData = submissionString.data(using: .utf8),
-                       let firebaseTrackInfo = try? JSONDecoder().decode(FirebaseTrackInfo.self, from: jsonData)
-                    {
-                        let trackInfo = TrackInfo(name: firebaseTrackInfo.name,
-                                                  artist: firebaseTrackInfo.artist,
-                                                  previewUrl: firebaseTrackInfo.previewUrl.flatMap { URL(string: $0) },
-                                                  coverUrl: firebaseTrackInfo.coverUrl.flatMap { URL(string: $0) },
-                                                  score: document.data()["score"] as? Int ?? 0)
-
-                        // Check if the current user has upvoted or downvoted this track
-                        _ = authManager.userID ?? ""
-                        let userVotes = document.data()["userVotes"] as? [String: Int] ?? [:]
-
-                        return TrackDisplay(trackInfo: trackInfo, documentID: document.documentID, userVotes: userVotes)
-                    }
-                } catch {
-                    print("Error parsing track: \(error)")
-                }
-                return nil
+            if let username = document.data()?["username"] as? String {
+                completion(username) // Pass username to completion handler
+            } else {
+                completion("Unknown User") // Default to "Unknown User" if username not found
             }
         }
     }
+
+
 }
 
 struct TrackRow: View {
@@ -120,6 +173,7 @@ struct TrackRow: View {
     @Binding var trackDisplays: [TrackDisplay]
     @State var playIcon: Bool = false
 
+    
     var body: some View {
         HStack {
             if let coverUrl = trackDisplay.trackInfo.coverUrl {
@@ -171,13 +225,13 @@ struct TrackRow: View {
                     }
                     .buttonStyle(BorderlessButtonStyle())
                     .foregroundColor(isUpvoted ? .green : .primary) // Set color based on upvote state
-
+                    
                     Text("\(trackDisplay.trackInfo.score)")
                         .foregroundColor(isUpvoted ? .green : (isDownvoted ? .red : .yellow))
                         .padding(.horizontal, 4)
                         .background(isUpvoted ? Color.green.opacity(0.3) : (isDownvoted ? Color.red.opacity(0.3) : Color.yellow.opacity(0.3)))
                         .cornerRadius(4)
-
+                    
                     Button(action: {
                         if !isDownvoted {
                             isDownvoted = true
@@ -193,6 +247,9 @@ struct TrackRow: View {
                     .buttonStyle(BorderlessButtonStyle())
                     .foregroundColor(isDownvoted ? .red : .primary) // Set color based on downvote state
                 }
+                Text("Submitted by: \(trackDisplay.username)")
+                    .foregroundColor(Color.green) // Display in green color
+                    .font(.subheadline)
             }
 
             Spacer()
@@ -233,6 +290,7 @@ struct TrackRow: View {
         }
     }
 
+    
     private func togglePreview() {
         if isPlayingPreview {
             // Pause the preview

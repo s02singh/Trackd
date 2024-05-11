@@ -39,7 +39,7 @@
 		661CB1AB2BBF8E4D00B722AD /* TrackdUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 661CB1AA2BBF8E4D00B722AD /* TrackdUITestsLaunchTests.swift */; };
 		661CB1C62BBFA55A00B722AD /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 661CB1C52BBFA55A00B722AD /* GoogleSignIn */; };
 		661CB1C82BBFA55A00B722AD /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 661CB1C72BBFA55A00B722AD /* GoogleSignInSwift */; };
-		661CB1CA2BBFA9C600B722AD /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 661CB1C92BBFA9C600B722AD /* GoogleService-Info.plist */; };
+		66AB70D22BE1AE690076C75E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 66AB70D12BE1AE690076C75E /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -89,7 +89,7 @@
 		661CB1A42BBF8E4D00B722AD /* TrackdUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrackdUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		661CB1A82BBF8E4D00B722AD /* TrackdUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackdUITests.swift; sourceTree = "<group>"; };
 		661CB1AA2BBF8E4D00B722AD /* TrackdUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackdUITestsLaunchTests.swift; sourceTree = "<group>"; };
-		661CB1C92BBFA9C600B722AD /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "../../../GoogleService-Info.plist"; sourceTree = "<group>"; };
+		66AB70D12BE1AE690076C75E /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "../../../Downloads/GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -149,7 +149,7 @@
 			isa = PBXGroup;
 			children = (
 				661750942BC08EA100A3630D /* Info.plist */,
-				661CB1C92BBFA9C600B722AD /* GoogleService-Info.plist */,
+				66AB70D12BE1AE690076C75E /* GoogleService-Info.plist */,
 				661750A62BC0930B00A3630D /* Splash.swift */,
 				661750AC2BC094B500A3630D /* Types.swift */,
 				661750A82BC093BC00A3630D /* AuthManager.swift */,
@@ -322,7 +322,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				661CB1952BBF8E4C00B722AD /* Preview Assets.xcassets in Resources */,
-				661CB1CA2BBFA9C600B722AD /* GoogleService-Info.plist in Resources */,
+				66AB70D22BE1AE690076C75E /* GoogleService-Info.plist in Resources */,
 				661CB1922BBF8E4C00B722AD /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

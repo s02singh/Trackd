@@ -40,6 +40,7 @@ struct TrackInfo {
     let previewUrl: URL?
     let coverUrl: URL?
     var score: Int // Added score property
+    let URI: String
 }
 
 // Struct for decoding Firebase data

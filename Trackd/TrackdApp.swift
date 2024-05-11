@@ -23,6 +23,9 @@ struct TrackdApp: App {
                     .onAppear(){spotifyManager.getDailyTheme()}
             } else {
                 Splash(isActive: $isActive)
+                    .environmentObject(authManager)
+                    .environmentObject(firestoreManager)
+                    .environmentObject(spotifyManager)
             }
         }
     }

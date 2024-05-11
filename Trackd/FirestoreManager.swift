@@ -28,18 +28,48 @@ class FirestoreManager: ObservableObject {
          */
     }
     
-    func createUser(email: String, password: String, username: String) -> User {
+    func randomNumericString(length: Int) -> String {
+        let numbers = "0123456789"
+        return String((0..<length).map{ _ in numbers.randomElement()! })
+    }
+
+    // Function to generate a unique username
+    func generateUniqueUsername(baseString: String) -> String {
+        let randomNumber = randomNumericString(length: 5)
+        return "\(baseString)\(randomNumber)"
+    }
+
+    func createUser(email: String, password: String, username: String, completion: @escaping (User?) -> Void) {
         let userRef = db.collection("users").document()
-        let newUser = User(id: userRef.documentID, email: email, password: password, username: username, accountCreationDate: Date(), userInvitedIDs: [], friendIDs: [])
-        userRef.setData(newUser.dictionary) { error in
-            if let error = error {
-                print("Error adding document: \(error)")
+        let userName = generateUniqueUsername(baseString: "TrackDer")
+        
+        db.collection("users").whereField("username", isEqualTo: userName).getDocuments { snapshot, error in
+            guard let snapshot = snapshot else {
+                print("Error fetching documents: \(error?.localizedDescription ?? "Unknown error")")
+                completion(nil)
+                return
+            }
+            
+            if snapshot.isEmpty {
+                let newUser = User(id: userRef.documentID, email: email, password: password, username: userName, accountCreationDate: Date(), userInvitedIDs: [], friendIDs: [])
+                userRef.setData(newUser.dictionary) { error in
+                    if let error = error {
+                        print("Error adding document: \(error)")
+                        completion(nil)
+                    } else {
+                        print("User added with ID: \(newUser.id)")
+                        completion(newUser)
+                    }
+                }
             } else {
-                print("User added with ID: \(String(describing: newUser.id))")
+                self.createUser(email: email, password: password, username: username, completion: completion)
             }
         }
-        return newUser
     }
+
+
+
+
     
     func fetchUser(id: String, completion: @escaping (User?, Error?) -> Void) {
             let userDocument = db.collection("users").document(id)

@@ -28,7 +28,10 @@ class WebViewController: UIViewController, WKNavigationDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        webView = WKWebView()
+        let webViewConfiguration = WKWebViewConfiguration()
+        webViewConfiguration.applicationNameForUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
+        
+        webView = WKWebView(frame: .zero, configuration: webViewConfiguration)
         webView.navigationDelegate = self
         view = webView
         

@@ -1,7 +1,9 @@
 import SwiftUI
+import FirebaseAuth
 
 struct Splash: View {
-    @Binding var isActive: Bool // Receive the isActive state binding
+    @Binding var isActive: Bool
+    @EnvironmentObject var authManager: AuthManager // Inject AuthManager
 
     var body: some View {
         ZStack {
@@ -19,14 +21,14 @@ struct Splash: View {
                 )
         }
         .onAppear {
-            // Set isActive to true after a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                self.isActive = true
+            // Fetch user data
+            authManager.fetchUser { success in
+                if success {
+                    // If user data is fetched successfully, set isActive to true
+                    self.isActive = true
+                }
             }
         }
+     
     }
 }
-
-
-
-

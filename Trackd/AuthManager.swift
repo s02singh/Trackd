@@ -86,5 +86,41 @@ class AuthManager: ObservableObject {
         }
     }
     
+    func fetchUser(completion: @escaping (Bool) -> Void) {
+        guard let userID = userID else {
+            completion(false)
+            return
+        }
+        
+        Firestore.firestore().collection("users").document(userID).getDocument { document, error in
+            if let document = document, document.exists {
+                if let userData = document.data(),
+                   let email = userData["email"] as? String,
+                   let password = userData["password"] as? String,
+                   let username = userData["username"] as? String,
+                   let accountCreationDateTimestamp = userData["accountCreationDate"] as? Timestamp,
+                   let userInvitedIDs = userData["userInvitedIDs"] as? [String],
+                   let friendIDs = userData["friendIDs"] as? [String] {
+                    
+                    let accountCreationDate = accountCreationDateTimestamp.dateValue()
+                    let user = User(id: userID,
+                                    email: email,
+                                    password: password,
+                                    username: username,
+                                    accountCreationDate: accountCreationDate,
+                                    userInvitedIDs: userInvitedIDs,
+                                    friendIDs: friendIDs)
+                    self.userName = username
+                    self.user = user
+                    completion(true)
+                } else {
+                    completion(false)
+                }
+            } else {
+                completion(false)
+            }
+        }
+    }
+    
    
 }

@@ -25,12 +25,12 @@ struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     @ObservedObject var firestoreManager = FirestoreManager()
     @FocusState private var isKeyboardFocused: Bool
+    @State private var showFields: Bool = false // Track whether to show fields or not
     
     var body: some View {
         ZStack {
             Color("Background").edgesIgnoringSafeArea(.all)
             VStack {
-                
                 // Display logo
                 Image("TrackdLogo")
                     .resizable()
@@ -41,84 +41,21 @@ struct LoginView: View {
                 LoginHeader()
                     .padding(.bottom)
                 
-                
-                // Prompt to enter username
-                TextField("Username", text: $username)
-                    .padding(16)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke()
-                            .onTapGesture {
-                                isKeyboardFocused = true
-                            }
-                    )
-                    .padding(.horizontal, 24)
-                    .focused($isKeyboardFocused)
-                    .padding(.vertical, 12)
-                
-                // Prompt to enter password
-                TextField("Password", text: $password)
-                    .padding(16)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke()
-                            .onTapGesture {
-                                isKeyboardFocused = true
-                            }
-                    )
-                    .padding(.horizontal, 24)
-                    .focused($isKeyboardFocused)
-                    .padding(.vertical, 12)
-                    .padding(.bottom, 30)
-                
-                
-                // Button for forgot password - in progress.
-                /*
-                 HStack {
-                 Spacer()
-                 Button(action: {}) {
-                 Text("Forgot Password?")
-                 }
-                 }
-                 .padding(.trailing, 24)
-                 */
-                
-                // Login button
+                // Button to show username field
                 Button(action: {
-                    isKeyboardFocused = false
-                    
-                    Task {
-                        
-                        do {
-                            // if successful, it will set the user's appropriate firebalses
-                            // after retrieving them from the firebase.
-                            if let (userId, userName) = try await authManager.signIn(username: username, password: password) {
-                                
-                                UserDefaults.standard.set(userId, forKey: "userID")
-                                authManager.userID = userId
-                                authManager.userName = userName
-                                authManager.isSignIn = true
-                                UserDefaults.standard.set(true, forKey: "signIn")
-                                
-                            } else {
-                                
-                            }
-                        } catch {
-                            print("Error signing in: \(error)")
-                        }
+                    withAnimation {
+                        showFields.toggle()
                     }
-                    
                 }) {
                     HStack {
                         Spacer()
-                        Text("Login")
+                        Text("Sign in with Username")
                             .foregroundColor(.white)
                         Spacer()
                     }
                 }
                 .padding(.horizontal, 7)
-                
-                .background(.black)
+                .background(Color.black)
                 .cornerRadius(6)
                 .padding(.vertical, 10)
                 .overlay(
@@ -126,8 +63,85 @@ struct LoginView: View {
                         .stroke(Color.white, lineWidth: 1)
                 )
                 
+                // Username field
+                if showFields {
+                    TextField("Username", text: $username)
+                        .padding(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke()
+                                .onTapGesture {
+                                    isKeyboardFocused = true
+                                }
+                        )
+                        .padding(.horizontal, 24)
+                        .focused($isKeyboardFocused)
+                        .padding(.vertical, 12)
+                    
+                    // Password field
+                    TextField("Password", text: $password)
+                        .padding(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke()
+                                .onTapGesture {
+                                    isKeyboardFocused = true
+                                }
+                        )
+                        .padding(.horizontal, 24)
+                        .focused($isKeyboardFocused)
+                        .padding(.vertical, 12)
+                        .padding(.bottom, 30)
+                    
+                    Button(action: {
+                        isKeyboardFocused = false
+                        
+                        Task {
+                            
+                            do {
+                                // if successful, it will set the user's appropriate firebalses
+                                // after retrieving them from the firebase.
+                                if let (userId, userName) = try await authManager.signIn(username: username, password: password) {
+                                    
+                                    UserDefaults.standard.set(userId, forKey: "userID")
+                                    authManager.userID = userId
+                                    authManager.userName = userName
+                                    authManager.isSignIn = true
+                                    UserDefaults.standard.set(true, forKey: "signIn")
+                                    
+                                } else {
+                                    
+                                }
+                            } catch {
+                                print("Error signing in: \(error)")
+                            }
+                        }
+                        
+                    }) {
+                        HStack {
+                            Spacer()
+                            Text("Login")
+                                .foregroundColor(.white)
+                            Spacer()
+                        }
+                    }
+                    .padding(.horizontal, 7)
+                    .background(Color.black)
+                    .cornerRadius(6)
+                    .padding(.vertical, 10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.white, lineWidth: 1)
+                    )
+                }
+                
+                // Login button
+            
+                
+                // Spacer to push content to top
                 Spacer()
-                    .frame(height: 60)
+                    .frame(height: 25)
+
                 
                 // Google signin button
                 GoogleSigninBtn {
@@ -197,9 +211,19 @@ struct LoginView: View {
                                 }
                             } else {
                                 // User doesn't exist so make a new one
+                                // Assuming this is where you call createUser
                                 if let profile = user.profile {
-                                    authManager.user = firestoreManager.createUser(email: userEmail, password: "!", username: profile.name)
+                                    firestoreManager.createUser(email: userEmail, password: "!", username: profile.name) { newUser in
+                                        if let newUser = newUser {
+                                            authManager.user = newUser
+                                            authManager.userID = newUser.id
+                                            UserDefaults.standard.set(newUser.id, forKey: "userID")
+                                        } else {
+                                            // Handle error or retry logic
+                                        }
+                                    }
                                 }
+
                             }
                         }
                         
