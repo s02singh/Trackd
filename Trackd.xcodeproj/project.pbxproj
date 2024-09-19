@@ -40,6 +40,9 @@
 		661CB1C62BBFA55A00B722AD /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 661CB1C52BBFA55A00B722AD /* GoogleSignIn */; };
 		661CB1C82BBFA55A00B722AD /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 661CB1C72BBFA55A00B722AD /* GoogleSignInSwift */; };
 		66AB70D22BE1AE690076C75E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 66AB70D12BE1AE690076C75E /* GoogleService-Info.plist */; };
+		66DEC5902C979B1800D460D3 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 66DEC58F2C979B1800D460D3 /* FirebaseStorage */; };
+		66DEC5932C97A84300D460D3 /* TOCropViewController in Frameworks */ = {isa = PBXBuildFile; productRef = 66DEC5922C97A84300D460D3 /* TOCropViewController */; };
+		66DEC5952C991E2900D460D3 /* UserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66DEC5942C991E2800D460D3 /* UserView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -90,6 +93,7 @@
 		661CB1A82BBF8E4D00B722AD /* TrackdUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackdUITests.swift; sourceTree = "<group>"; };
 		661CB1AA2BBF8E4D00B722AD /* TrackdUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackdUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		66AB70D12BE1AE690076C75E /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "../../../Downloads/GoogleService-Info.plist"; sourceTree = "<group>"; };
+		66DEC5942C991E2800D460D3 /* UserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,9 +103,11 @@
 			files = (
 				6617509F2BC0923E00A3630D /* FirebaseAnalyticsSwift in Frameworks */,
 				661750A12BC0923E00A3630D /* FirebaseAuth in Frameworks */,
+				66DEC5902C979B1800D460D3 /* FirebaseStorage in Frameworks */,
 				661CB1C62BBFA55A00B722AD /* GoogleSignIn in Frameworks */,
 				661750A52BC0923E00A3630D /* FirebaseFirestoreSwift in Frameworks */,
 				661CB1C82BBFA55A00B722AD /* GoogleSignInSwift in Frameworks */,
+				66DEC5932C97A84300D460D3 /* TOCropViewController in Frameworks */,
 				6617509D2BC0923E00A3630D /* FirebaseAnalytics in Frameworks */,
 				661750C52BC3020D00A3630D /* SpotifyAPI in Frameworks */,
 				661750A32BC0923E00A3630D /* FirebaseFirestore in Frameworks */,
@@ -164,6 +170,7 @@
 				661750C92BC30F5000A3630D /* Constants.swift */,
 				661750B22BC095D200A3630D /* LoginView.swift */,
 				661750BE2BC2F44700A3630D /* ProfileView.swift */,
+				66DEC5942C991E2800D460D3 /* UserView.swift */,
 				661750BC2BC2F40B00A3630D /* RanksView.swift */,
 				661750BA2BC2F3FF00A3630D /* HomeView.swift */,
 				661CB18D2BBF8E4800B722AD /* TrackdApp.swift */,
@@ -226,6 +233,8 @@
 				661750A22BC0923E00A3630D /* FirebaseFirestore */,
 				661750A42BC0923E00A3630D /* FirebaseFirestoreSwift */,
 				661750C42BC3020D00A3630D /* SpotifyAPI */,
+				66DEC58F2C979B1800D460D3 /* FirebaseStorage */,
+				66DEC5922C97A84300D460D3 /* TOCropViewController */,
 			);
 			productName = Trackd;
 			productReference = 661CB18A2BBF8E4800B722AD /* Trackd.app */;
@@ -304,6 +313,7 @@
 				661CB1C42BBFA55A00B722AD /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				6617509B2BC0923E00A3630D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				661750C32BC3020D00A3630D /* XCRemoteSwiftPackageReference "SpotifyAPI" */,
+				66DEC5912C97A84300D460D3 /* XCRemoteSwiftPackageReference "TOCropViewController" */,
 			);
 			productRefGroup = 661CB18B2BBF8E4800B722AD /* Products */;
 			projectDirPath = "";
@@ -355,6 +365,7 @@
 				661750BB2BC2F3FF00A3630D /* HomeView.swift in Sources */,
 				661750AB2BC0942F00A3630D /* FirestoreManager.swift in Sources */,
 				661750B72BC0965D00A3630D /* LoginHeader.swift in Sources */,
+				66DEC5952C991E2900D460D3 /* UserView.swift in Sources */,
 				661750B32BC095D200A3630D /* LoginView.swift in Sources */,
 				661750CC2BC30FD100A3630D /* SceneDelegate.swift in Sources */,
 				661750CA2BC30F5000A3630D /* Constants.swift in Sources */,
@@ -731,6 +742,14 @@
 				minimumVersion = 7.1.0;
 			};
 		};
+		66DEC5912C97A84300D460D3 /* XCRemoteSwiftPackageReference "TOCropViewController" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/TimOliver/TOCropViewController";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.4;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -773,6 +792,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 661CB1C42BBFA55A00B722AD /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignInSwift;
+		};
+		66DEC58F2C979B1800D460D3 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6617509B2BC0923E00A3630D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
+		};
+		66DEC5922C97A84300D460D3 /* TOCropViewController */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 66DEC5912C97A84300D460D3 /* XCRemoteSwiftPackageReference "TOCropViewController" */;
+			productName = TOCropViewController;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -7,7 +7,7 @@
 import Foundation
 import Firebase
 import FirebaseFirestore
-
+import SwiftUI
 class FirestoreManager: ObservableObject {
     var db: Firestore
     // maybe todo: make a state object of the current user
@@ -51,7 +51,7 @@ class FirestoreManager: ObservableObject {
             }
             
             if snapshot.isEmpty {
-                let newUser = User(id: userRef.documentID, email: email, password: password, username: userName, accountCreationDate: Date(), userInvitedIDs: [], friendIDs: [])
+                let newUser = User(id: userRef.documentID, email: email, password: password, username: userName, accountCreationDate: Date(), userInvitedIDs: [], friendIDs: [], profileUrl: "0", score: 0)
                 userRef.setData(newUser.dictionary) { error in
                     if let error = error {
                         print("Error adding document: \(error)")
@@ -84,6 +84,8 @@ class FirestoreManager: ObservableObject {
                     completion(nil, nil)
                     return
                 }
+                
+                print("unwrap attempt")
 
                 if let userData = document.data(),
                    let id = userData["id"] as? String,
@@ -92,14 +94,20 @@ class FirestoreManager: ObservableObject {
                    let username = userData["username"] as? String,
                    let accountCreationTimestamp = userData["accountCreationDate"] as? Timestamp,
                    let userInvitedIDs = userData["userInvitedIDs"] as? [String],
-                   let friendIDs = userData["friendIDs"] as? [String] {
+                   let friendIDs = userData["friendIDs"] as? [String],
+                    let profileUrl = userData["profileUrl"] as? String,
+                    let score = userData["score"] as? Int
+                {
                        let user = User(id: id,
                                        email: email,
                                        password: password,
                                        username: username,
                                        accountCreationDate: accountCreationTimestamp.dateValue(),
                                        userInvitedIDs: userInvitedIDs,
-                                       friendIDs: friendIDs)
+                                       friendIDs: friendIDs,
+                                       profileUrl: profileUrl,
+                                       score: score
+                       )
                        
                        completion(user, nil)
                 } else {

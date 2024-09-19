@@ -5,16 +5,18 @@
 //
 
 import Foundation
-
+import SwiftUI
 // User
 struct User {
     let id: String
     let email: String
     let password: String
-    let username: String
+    var username: String
     let accountCreationDate: Date
     var userInvitedIDs: [String]
     var friendIDs: [String] // user ids
+    var profileUrl: String
+    var score: Int
 }
 
 
@@ -29,7 +31,9 @@ extension User {
             "username": username,
             "accountCreationDate": accountCreationDate,
             "userInvitedIDs": userInvitedIDs,
-            "friendIDs": friendIDs
+            "friendIDs": friendIDs,
+            "profileUrl": profileUrl,
+            "score": score
         ]
     }
 }

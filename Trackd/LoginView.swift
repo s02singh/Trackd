@@ -26,6 +26,7 @@ struct LoginView: View {
     @ObservedObject var firestoreManager = FirestoreManager()
     @FocusState private var isKeyboardFocused: Bool
     @State private var showFields: Bool = false // Track whether to show fields or not
+    @State private var isSigningin: Bool = false
     
     var body: some View {
         ZStack {
@@ -108,6 +109,16 @@ struct LoginView: View {
                                     authManager.userName = userName
                                     authManager.isSignIn = true
                                     UserDefaults.standard.set(true, forKey: "signIn")
+                                    if let userId = authManager.userID{
+                                        processSubmissionsForUser(userID: userId) {newscore, error in
+                                            if let error = error {
+                                                print("Error processing submissions: \(error)")
+                                            } else {
+                                                print("Submissions processed and last sign-in updated.")
+                                                authManager.user?.score = newscore ?? 0
+                                            }
+                                        }
+                                    }
                                     
                                 } else {
                                     
@@ -145,6 +156,7 @@ struct LoginView: View {
                 
                 // Google signin button
                 GoogleSigninBtn {
+                    isSigningin = true
                     
                     // Google sigin functionality
                     guard let clientID = FirebaseApp.app()?.options.clientID else { return }
@@ -203,6 +215,7 @@ struct LoginView: View {
                                             print("Error fetching user: \(error.localizedDescription)")
                                         } else if let fetchedUser = user {
                                             authManager.user = fetchedUser
+                                            
                                         } else {
                                             print("User not found.")
                                         }
@@ -229,8 +242,19 @@ struct LoginView: View {
                         
                         print("SIGN IN")
                         UserDefaults.standard.set(true, forKey: "signIn")
+                        if let userId = authManager.userID{
+                            processSubmissionsForUser(userID: userId) {newscore, error in
+                                if let error = error {
+                                    print("Error processing submissions: \(error)")
+                                } else {
+                                    print("Submissions processed and last sign-in updated.")
+                                    authManager.user?.score = newscore ?? 0
+                                }
+                            }
+                        }
                         
                     }
+                    isSigningin = false
                 }
                 .padding(.top, 20)
                 // GoogleSiginBtn
@@ -278,6 +302,110 @@ struct LoginView: View {
             isKeyboardFocused = false
         }
     }
+    
+    
+    func updateLastSignedIn(userID: String) {
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(userID)
+        
+        // Update the "lastsignedin" field with the current server timestamp
+        userRef.updateData([
+            "lastsignedin": FieldValue.serverTimestamp()
+        ]) { error in
+            if let error = error {
+                print("Error updating lastsignedin: \(error)")
+            } else {
+                print("Successfully updated lastsignedin field.")
+            }
+        }
+    }
+    
+
+    // Function to compare last signed in date and process submissions
+    func processSubmissionsForUser(userID: String, completion: @escaping (Int?, Error?) -> Void) {
+        let db = Firestore.firestore()
+        let userRef = db.collection("users").document(userID)
+        
+        // Fetch the last signed-in date and the current user score
+        userRef.getDocument { documentSnapshot, error in
+            if let error = error {
+                print("Error fetching user data: \(error)")
+                completion(nil, error)
+                return
+            }
+            
+            // Get the last signed-in date from Firestore
+            let lastSignedIn = documentSnapshot?.get("lastsignedin") as? Timestamp ?? Timestamp(date: Date.distantPast)
+            let lastSignedInDate = lastSignedIn.dateValue()
+            
+            // Get the user's current score from Firestore (default to 0 if missing)
+            let currentScore = documentSnapshot?.get("score") as? Int ?? 0
+            
+            // Date formatter to match the Firestore dailySubmissions structure
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            
+            // Generate the list of dates between lastSignedInDate and currentDate
+            var currentDateIter = Calendar.current.startOfDay(for: lastSignedInDate)
+            let endDate = Calendar.current.startOfDay(for: Date())
+            
+            var totalScore = 0
+            let dispatchGroup = DispatchGroup()
+
+            while currentDateIter < endDate {
+                // Convert the current date to the Firestore collection name format
+                let dateString = dateFormatter.string(from: currentDateIter)
+                let submissionsRef = db.collection("dailySubmissions").document(dateString).collection("submissions")
+                
+                dispatchGroup.enter()
+                
+                submissionsRef.whereField("userPosted", isEqualTo: userID)
+                    .getDocuments { querySnapshot, error in
+                        if let error = error {
+                            print("Error fetching submissions for \(dateString): \(error)")
+                            dispatchGroup.leave()
+                            return
+                        }
+                        
+                        querySnapshot?.documents.forEach { document in
+                            if let score = document.get("score") as? Int {
+                                totalScore += score
+                            }
+                        }
+                        
+                        dispatchGroup.leave()
+                    }
+                
+                currentDateIter = Calendar.current.date(byAdding: .day, value: 1, to: currentDateIter) ?? currentDateIter
+            }
+            
+            dispatchGroup.notify(queue: .main) {
+                print("Total score from submissions since last sign-in: \(totalScore)")
+                
+                let newScore = currentScore + totalScore
+                
+                // Update the user's score and last signed-in date
+                userRef.updateData([
+                    "score": newScore,
+                    "lastsignedin": Timestamp(date: Date())
+                ]) { error in
+                    if let error = error {
+                        print("Error updating user score or last signed-in date: \(error)")
+                        completion(nil, error)
+                        return
+                    }
+                    
+                    print("User's score and last signed-in date successfully updated.")
+                    completion(newScore, nil) // Return the new score
+                }
+            }
+        }
+    }
+
+
+    
+
+    
 }
 
 

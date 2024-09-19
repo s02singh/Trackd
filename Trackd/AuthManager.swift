@@ -5,6 +5,7 @@ import Firebase
 import SwiftUI
 import FirebaseFirestore
 import FirebaseCore
+import FirebaseStorage
 
 class AuthManager: ObservableObject {
     // records various auth variables
@@ -18,6 +19,7 @@ class AuthManager: ObservableObject {
     @ObservedObject var firestoreManager = FirestoreManager()
     @Published var authToken: String? = nil
     @Published var accessToken: String? = nil
+    @Published var pfp: UIImage?
  
     
     init() {
@@ -30,6 +32,7 @@ class AuthManager: ObservableObject {
         if let userId = userId {
             userID = userId
         }
+        pfp = UIImage(named: "profileicon")
     }
     
     // Allows user to update their password
@@ -63,6 +66,13 @@ class AuthManager: ObservableObject {
                         print(userName)
                         print(userId)
                         self.userID = userID
+                        Task {
+                            if let user = await self.fetchUser() {
+                                print("User fetched: \(user)")
+                            } else {
+                                print("Failed to fetch user")
+                            }
+                        }
                         return (userId, userName)
                     }
                 }
@@ -86,41 +96,86 @@ class AuthManager: ObservableObject {
         }
     }
     
-    func fetchUser(completion: @escaping (Bool) -> Void) {
+    func fetchUser() async -> User? {
+        print("Fetching user...")
         guard let userID = userID else {
-            completion(false)
-            return
+            return nil
         }
-        
-        Firestore.firestore().collection("users").document(userID).getDocument { document, error in
-            if let document = document, document.exists {
-                if let userData = document.data(),
-                   let email = userData["email"] as? String,
-                   let password = userData["password"] as? String,
-                   let username = userData["username"] as? String,
-                   let accountCreationDateTimestamp = userData["accountCreationDate"] as? Timestamp,
-                   let userInvitedIDs = userData["userInvitedIDs"] as? [String],
-                   let friendIDs = userData["friendIDs"] as? [String] {
-                    
-                    let accountCreationDate = accountCreationDateTimestamp.dateValue()
-                    let user = User(id: userID,
-                                    email: email,
-                                    password: password,
-                                    username: username,
-                                    accountCreationDate: accountCreationDate,
-                                    userInvitedIDs: userInvitedIDs,
-                                    friendIDs: friendIDs)
+
+        do {
+            let document = try await Firestore.firestore().collection("users").document(userID).getDocument()
+
+            print("Document retrieved")
+
+            if let userData = document.data(),
+               let id = userData["id"] as? String,
+               let email = userData["email"] as? String,
+               let password = userData["password"] as? String,
+               let username = userData["username"] as? String,
+               let accountCreationTimestamp = userData["accountCreationDate"] as? Timestamp,
+               let userInvitedIDs = userData["userInvitedIDs"] as? [String],
+               let friendIDs = userData["friendIDs"] as? [String],
+               let profileUrl = userData["profileUrl"] as? String,
+               let score = userData["score"] as? Int
+            {
+                let user = User(id: id,
+                                email: email,
+                                password: password,
+                                username: username,
+                                accountCreationDate: accountCreationTimestamp.dateValue(),
+                                userInvitedIDs: userInvitedIDs,
+                                friendIDs: friendIDs,
+                                profileUrl: profileUrl,
+                                score: score
+                )
+                
+                print("Assigning user data")
+                DispatchQueue.main.async {
                     self.userName = username
                     self.user = user
-                    completion(true)
-                } else {
-                    completion(false)
+                }
+                
+                // Start loading the profile image in the background after returning the user
+            
+                await loadProfileImage(for: userID)
+        
+                
+                return user
+            }
+        } catch {
+            print("Error fetching user: \(error)")
+        }
+
+        return nil
+    }
+    
+    func loadProfileImage(for userID: String) async {
+        let storageRef = Storage.storage().reference().child("profile_images/\(userID).jpg")
+        
+        do {
+            // Fetch image data from Firebase Storage
+            let data = try await storageRef.data(maxSize: 1 * 1024 * 1024) // 1 MB max size
+            // Convert data to UIImage
+            if let image = UIImage(data: data) {
+                DispatchQueue.main.async {
+                    self.pfp = image
                 }
             } else {
-                completion(false)
+                print("Failed to convert data to UIImage")
+                DispatchQueue.main.async {
+                    self.pfp = UIImage(named: "profileicon")
+                }
+            }
+        } catch {
+            print("Error fetching profile image: \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                self.pfp = UIImage(named: "profileicon")
             }
         }
     }
+
+
+
     
    
 }

@@ -9,6 +9,17 @@ import AuthenticationServices
 import WebKit
 import AVFoundation
 
+
+
+struct ArtistInfo {
+    let name: String
+    let imageUrl: URL
+    var image: UIImage?
+    var isLoading: Bool = true
+    var id = "holder"
+}
+
+
 class HomeViewModel: ObservableObject {
     @Published var currentTrack: TrackInfo?
     @Published var authorized = false
@@ -19,8 +30,10 @@ class HomeViewModel: ObservableObject {
     private var searchCancellable: AnyCancellable?
     @Published var searchResults: [TrackInfo] = []
     @Published var dailyTheme: String = ""
+    @Published var topArtists: [ArtistInfo] = []
+    @Published var topSongs: [TrackInfo] = []
+    @Published var artistsLoaded: Bool = false
     
-
     @Published var audioPlayer: AVPlayer?
 
     init() {
@@ -38,6 +51,29 @@ class HomeViewModel: ObservableObject {
                     self?.searchTrack(query: searchText)
                 }
          */
+    }
+
+    func fetchTopArtistsAndSongs() {
+        print("fetching try")
+        guard let accessToken = accessToken else {
+            print("accessToken not found")
+            return
+        }
+        
+        print("token found")
+        spotifyAPI.getTopArtists(limit: 4, accessToken: accessToken) { artists in
+            DispatchQueue.main.async {
+                self.topArtists = artists
+                self.artistsLoaded = true
+            }
+        }
+        
+        
+        // spotifyAPI.getTopSongs(limit: 5) { songs in
+        //    DispatchQueue.main.async {
+        // self.topSongs = songs
+        //   }
+        //  }
     }
 
     func getDailyTheme() {
@@ -89,7 +125,7 @@ class HomeViewModel: ObservableObject {
     }
     
     func authorizeSpotify(completion: @escaping (Bool) -> Void) {
-        let authorizationURL = "https://accounts.spotify.com/authorize?client_id=2b5e025dbfe94f2ea67d23ec1f934e4e&response_type=code&redirect_uri=https://advancebrokerage.net/&scope=user-read-private"
+        let authorizationURL = "https://accounts.spotify.com/authorize?client_id=2b5e025dbfe94f2ea67d23ec1f934e4e&response_type=code&redirect_uri=https://mlt-sahilsingh15.replit.app/&scope=user-read-private%20user-top-read"
         guard let url = URL(string: authorizationURL) else {
             completion(false)
             return
@@ -148,6 +184,7 @@ class HomeViewModel: ObservableObject {
                 // Store the access token
                 print(accessToken)
                 self.accessToken = accessToken
+                self.fetchTopArtistsAndSongs()
                 // Fetch a sample track
                 
             })
@@ -155,11 +192,11 @@ class HomeViewModel: ObservableObject {
     }
 
     func searchTrack(query: String) {
+        
         guard let accessToken = accessToken else {
             print("Access token is missing")
             return
         }
-
         spotifyAPI.searchTrack(query: query, accessToken: accessToken)
             .sink(receiveCompletion: { completion in
                 switch completion {
@@ -180,16 +217,29 @@ class HomeViewModel: ObservableObject {
     }
 
     func searchTracks(query: String) {
+        print("searching")
         guard let accessToken = accessToken else {
             print("Access token is missing")
             return
         }
+        print("token found")
 
         spotifyAPI.searchTracks(query: query, accessToken: accessToken)
             .sink(receiveCompletion: { completion in
                 switch completion {
                 case .failure(let error):
                     print("Error searching tracks: \(error)")
+                    if let decodingError = error as? DecodingError {
+                        switch decodingError {
+                        case .dataCorrupted(let context):
+                            print("Data corrupted: \(context)")
+                            if let underlyingError = context.underlyingError {
+                                print("Underlying error: \(underlyingError)")
+                            }
+                        default:
+                            break
+                        }
+                    }
                     DispatchQueue.main.async {
                         self.searchResults = []
                     }
@@ -265,7 +315,64 @@ class SpotifyAPI {
         self.clientId = clientId
         self.clientSecret = clientSecret
     }
+    
+    func getTopArtists(limit: Int, accessToken: String, completion: @escaping ([ArtistInfo]) -> Void) {
+        let url = URL(string: "https://api.spotify.com/v1/me/top/artists?time_range=short_term&limit=\(limit)")!
+        
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let data = data, error == nil else {
+                print("Error fetching top artists: \(error?.localizedDescription ?? "Unknown error")")
+                completion([])
+                return
+            }
+
+            do {
+                let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+                let artists = json?["items"] as? [[String: Any]] ?? []
+                
+                var topArtists: [ArtistInfo] = artists.compactMap { artist in
+                    guard let name = artist["name"] as? String,
+                          let images = artist["images"] as? [[String: Any]],
+                          let imageUrlString = images.first?["url"] as? String,
+                          let imageUrl = URL(string: imageUrlString),
+                          let spotifyId = artist["id"] as? String // Ensure spotifyId is a string
+                    else {
+                        return nil
+                    }
+                    
+                    // Assign the spotifyId to the id property of ArtistInfo
+                    return ArtistInfo(name: name, imageUrl: imageUrl, id: spotifyId)
+                }
+
+                
+                DispatchQueue.global().async {
+                    for i in 0..<topArtists.count {
+                        if let imageData = try? Data(contentsOf: topArtists[i].imageUrl),
+                           let image = UIImage(data: imageData) {
+                            topArtists[i].image = image
+                            topArtists[i].isLoading = false
+                        } else {
+                            topArtists[i].isLoading = false
+                        }
+                        DispatchQueue.main.async {
+                            completion(topArtists)
+                        }
+                    }
+                }
+            } catch {
+                print("Error parsing top artists response: \(error.localizedDescription)")
+                completion([])
+            }
+        }
+        
+        task.resume()
+    }
+
+
+    
     func searchTrack(query: String, accessToken: String) -> AnyPublisher<Track, Error> {
         let formattedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         let url = URL(string: "https://api.spotify.com/v1/search?q=\(formattedQuery)&type=track&limit=1")!
@@ -306,7 +413,7 @@ class SpotifyAPI {
 
     
     func requestAccessToken(authorizationCode: String) -> AnyPublisher<String, Error> {
-        let redirectUri = "https://advancebrokerage.net/" // Custom redirect URI
+        let redirectUri = "https://mlt-sahilsingh15.replit.app/" // Custom redirect URI
         let body = "grant_type=authorization_code&code=\(authorizationCode)&redirect_uri=\(redirectUri)"
         let postData = body.data(using: .utf8)
 
@@ -413,6 +520,13 @@ struct HomeView: View {
     @State var submitting: Bool = false
     @State var dailyTheme: String = ""
     @State private var isPlayingPreview = false
+    @State private var selectedArtist: Int? = nil
+    @Namespace var animation
+    @State var showTopArtists: Bool = false
+    
+    
+    
+    
     
     var body: some View {
         if isLoading {
@@ -427,6 +541,7 @@ struct HomeView: View {
                                 if success {
                                     // Authorization succeeded, handle success
                                     print("Authorization successful!")
+                                    viewModel.fetchTopArtistsAndSongs()
                                     authorized = true
                                     if let accToken = viewModel.accessToken{
                                         print("accToken is: \(accToken)" )
@@ -477,7 +592,6 @@ struct HomeView: View {
                         )
                         .padding(.horizontal, 24)
                         .focused($isKeyboardFocused)
-                        .padding(.vertical, 12)
                         .onTapGesture {
                             // Deselect the current track when the search bar is clicked
                             viewModel.currentTrack = nil
@@ -515,7 +629,7 @@ struct HomeView: View {
                     }
                     .padding()
                     .sheet(isPresented: $isAuthorizationWebViewPresented) {
-                        WebViewWrapper(url: URL(string: "https://accounts.spotify.com/authorize?client_id=2b5e025dbfe94f2ea67d23ec1f934e4e&response_type=code&redirect_uri=https://advancebrokerage.net/&scope=user-read-private")!, callbackURLScheme: "https", onAuthorizationCodeReceived: { code in
+                        WebViewWrapper(url: URL(string: "https://accounts.spotify.com/authorize?client_id=2b5e025dbfe94f2ea67d23ec1f934e4e&response_type=code&redirect_uri=https://mlt-sahilsingh15.replit.app/&scope=user-read-private%20user-top-read")!, callbackURLScheme: "https", onAuthorizationCodeReceived: { code in
                             print("Authorization Code: \(code)")
                             // Handle authorization code
                             viewModel.handleAuthorizationRedirect(code: code)
@@ -531,33 +645,134 @@ struct HomeView: View {
                 
                 
                 // Display search results or selected track information
-                if viewModel.currentTrack == nil {
-                                    // Display search results
-                    List(viewModel.searchResults, id: \.name) { trackInfo in
-                        SearchResultsRow(trackInfo: trackInfo)
-                            .onTapGesture {
-                                // Handle track selection
-                                viewModel.currentTrack = trackInfo
-                            }
-                    }
-                    .onTapGesture {
-                        isKeyboardFocused = false
-                    }
-                } else {
-                    // Display selected track information and preview button
-                    if let trackInfo = viewModel.currentTrack {
-                        SongView(trackInfo: trackInfo)
-                            .padding()
-                            .environmentObject(authManager)
-                            .environmentObject(viewModel)
-                        Spacer()
-      
-                           
+                if (!viewModel.searchText.isEmpty){
+                    if viewModel.currentTrack == nil {
+                        // Display search results
+                        List(viewModel.searchResults, id: \.name) { trackInfo in
+                            SearchResultsRow(trackInfo: trackInfo)
+                                .onTapGesture {
+                                    // Handle track selection
+                                    viewModel.currentTrack = trackInfo
+                                }
+                        }
+                        .onTapGesture {
+                            isKeyboardFocused = false
+                        }
+                    } else {
+                        // Display selected track information and preview button
+                        if let trackInfo = viewModel.currentTrack {
+                            SongView(trackInfo: trackInfo)
+                                .padding()
+                                .environmentObject(authManager)
+                                .environmentObject(viewModel)
+                            Spacer()
+                            
+                            
+                        }
                     }
                 }
+                if(viewModel.artistsLoaded && viewModel.searchText.isEmpty && viewModel.currentTrack == nil){
+                    VStack {
+                        Text("My Top Artists")
+                            .font(.largeTitle)
+                            .bold()
+                            .foregroundStyle(
+                                LinearGradient(gradient: Gradient(colors: [.blue, .purple, .pink]), startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .padding(.bottom, 5)
+                        Text("(last 4 weeks)")
+                            .font(.body)
+                            .bold()
+                            .foregroundStyle(
+                                LinearGradient(gradient: Gradient(colors: [.blue, .purple, .pink]), startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                        ScrollViewReader{ proxy in
+                            ScrollView {
+                                VStack(spacing: 20) {
+                                    
+                                    ForEach(viewModel.topArtists.indices, id: \.self) { index in
+                                        let artist = viewModel.topArtists[index]
+                                        
+                                        ZStack {
+                                            if selectedArtist == index {
+                                                detailedArtistCard(artist: artist)
+                                                    .matchedGeometryEffect(id: index, in: animation)
+                                                    .onTapGesture {
+                                                        withAnimation(.spring()) {
+                                                            selectedArtist = nil
+                                                        }
+                                                    }
+                                            } else {
+                                                basicArtistCard(artist: artist)
+                                                    .matchedGeometryEffect(id: index, in: animation)
+                                                    .onTapGesture {
+                                                        withAnimation {
+                                                            proxy.scrollTo(index, anchor: .center) // Auto-focus on card
+                                                            
+                                                        }
+                                                        withAnimation(.spring()) {
+                                                            
+                                                            selectedArtist = index
+                                                        }
+                                                        
+                                                    }
+                                            }
+                                        }
+                                        .frame(height: selectedArtist == index ? 400 : 100)
+                                        .animation(.easeInOut(duration: 0.5), value: selectedArtist)
+                                        .transition(.slide)
+                                    }
+                                }
+                                .padding()
+                            }
+                        }
+                    }
+                    .opacity(showTopArtists ? 1 : 0)  // initially hidden
+                    .onAppear {
+                        showTopArtists = true  // slide in with animation
+                    }
+                    .animation(.easeInOut(duration: 1.0), value: showTopArtists)
+                    //.animation(.easeInOut(duration: 0.5), value: selectedArtist)
+                    .padding()
+                    /*
+                     // Top 5 Songs Card
+                     VStack(alignment: .leading) {
+                     Text("Top 5 Songs")
+                     .font(.headline)
+                     .padding(.bottom, 5)
+                     
+                     ForEach(viewModel.topSongs.indices, id: \.self) { index in
+                     HStack {
+                     Image(uiImage: viewModel.topSongs[index].albumImage)
+                     .resizable()
+                     .frame(width: 50, height: 50)
+                     .clipShape(Circle())
+                     VStack(alignment: .leading) {
+                     Text("\(index + 1). \(viewModel.topSongs[index].name)")
+                     .font(.subheadline)
+                     Text(viewModel.topSongs[index].artist)
+                     .font(.footnote)
+                     .foregroundColor(.secondary)
+                     }
+                     Spacer()
+                     }
+                     .padding(.vertical, 5)
+                     }
+                     }
+                     .padding()
+                     .background(Color(.secondarySystemBackground))
+                     .cornerRadius(10)
+                     */
+                }
+                Spacer()
+            }
+            .onChange(of: viewModel.accessToken){ newValue in
+                viewModel.fetchTopArtistsAndSongs()
             }
             .onAppear(){
                 if let accessToken = authManager.accessToken{
+                    print("first")
+                    print(accessToken)
                     viewModel.accessToken = accessToken
                 }
             }
@@ -568,13 +783,99 @@ struct HomeView: View {
                 isKeyboardFocused = false
             }
         }
+     
     }
     
-
-
-
+    func basicArtistCard(artist: ArtistInfo) -> some View {
+           HStack {
+               Image(uiImage: artist.image ?? UIImage(named: "TrackdLogo")!)
+                   .resizable()
+                   .frame(width: 60, height: 60)
+                   .clipShape(Circle())
+                   .shadow(radius: 5)
+               
+               VStack(alignment: .leading, spacing: 5) {
+                   Text(artist.name)
+                       .font(.title2)
+                       .bold()
+                       .foregroundStyle(
+                           LinearGradient(gradient: Gradient(colors: [.blue, .purple]), startPoint: .leading, endPoint: .trailing)
+                       )
+                   
+                   if artist.isLoading {
+                       ProgressView()
+                   }
+               }
+               Spacer()
+           }
+           .padding()
+           .background(
+               RoundedRectangle(cornerRadius: 15)
+                   .fill(Color(.secondarySystemBackground))
+                   .shadow(color: Color.black.opacity(0.2), radius: 5, x: 0, y: 5)
+           )
+       }
+       
+    func openSpotifyArtist(artistId: String) {
+        let spotifyURLString = "spotify://artist/\(artistId)"
+        if let spotifyURL = URL(string: spotifyURLString) {
+            if UIApplication.shared.canOpenURL(spotifyURL) {
+                UIApplication.shared.open(spotifyURL, options: [:], completionHandler: nil)
+            } else {
+                // Fallback: open Spotify artist page in Safari if app isn't installed
+                let webURLString = "https://open.spotify.com/artist/\(artistId)"
+                if let webURL = URL(string: webURLString) {
+                    UIApplication.shared.open(webURL, options: [:], completionHandler: nil)
+                }
+            }
+        }
+    }
     
-}
+       func detailedArtistCard(artist: ArtistInfo) -> some View {
+           VStack(spacing: 10) {
+               Image(uiImage: artist.image ?? UIImage(named: "placeholder")!)
+                   .resizable()
+                   .scaledToFit()
+                   .frame(width: 150, height: 150)
+                   .clipShape(Circle())
+                   .shadow(radius: 10)
+
+               Text(artist.name)
+                   .font(.largeTitle)
+                   .bold()
+                   .foregroundStyle(
+                       LinearGradient(gradient: Gradient(colors: [.blue, .purple, .pink]), startPoint: .leading, endPoint: .trailing)
+                   )
+
+               if artist.isLoading {
+                   ProgressView()
+               }
+
+               Spacer()
+
+               Button(action: {
+                   openSpotifyArtist(artistId: artist.id)
+               }) {
+                   Text("Open on Spotify")
+                       .font(.headline)
+                       .foregroundColor(.white)
+                       .padding()
+                       .background(
+                           Capsule()
+                               .fill(LinearGradient(gradient: Gradient(colors: [.blue, .purple]), startPoint: .leading, endPoint: .trailing))
+                       )
+                       .shadow(radius: 10)
+               }
+           }
+           .padding()
+           .background(
+               RoundedRectangle(cornerRadius: 20)
+                   .fill(Color(.tertiarySystemBackground))
+                   .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 10)
+           )
+       }
+   }
+    
 
 
 
@@ -582,36 +883,29 @@ struct LinearGradientText: View {
     var text: String
     
     var body: some View {
-        let gradient = Gradient(colors: [
-            Color.green.opacity(1),
-            Color.green.opacity(1),
-            Color.green.opacity(1)
-        ])
-        let textLength = CGFloat(text.count)
-        
-        return HStack(spacing: 0) {
-            ForEach(0..<text.count) { index in
-                let char = text[text.index(text.startIndex, offsetBy: index)]
-                let percentage = CGFloat(index) / textLength
-                Text(String(char))
-                    .foregroundColor(.clear)
-                    .background(
-                        LinearGradient(
-                            gradient: gradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .mask(
-                            Text(String(char))
-                                .font(.custom("AvenirNext-DemiBold", size: 50))
-                                .opacity(percentage + 0.4) // Adjust opacity based on position
-                        )
-                    )
-                    .padding(0.5)
-            }
-        }
+        Text(text)
+            .font(.custom("AvenirNext-DemiBold", size: 50))
+            .fontWeight(.bold)
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [
+                        Color.green.opacity(0.5),
+                        Color.green.opacity(0.7),
+                        Color.green.opacity(0.9)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .lineLimit(1) // Keep the text on one line
+            .minimumScaleFactor(0.5) // Allow the text to scale down to 50% if needed
+            .padding(.vertical, 12)
+            .padding(.horizontal, 24)
     }
 }
+
+
+
 
 
 
@@ -665,15 +959,18 @@ struct SongView: View {
     @State private var isPlayingPreview = false
     @State private var submissionCompleted: Bool = false
     @State private var submitting: Bool = false
-    @State private var alreadySubmitted: Bool = false // Track whether the song has already been submitted
+    @State private var alreadySubmitted: Bool = false
+    @State private var rotateDegrees: Double = 0 // For spinning animation
+    @State private var timer: Timer? // To control the spinning timer
     @EnvironmentObject var viewModel: HomeViewModel
     @EnvironmentObject var authManager: AuthManager
     
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                if let coverUrl = trackInfo.coverUrl {
-                    AsyncImage(url: coverUrl) { phase in
+        ZStack {
+            Color.gray.opacity(0.2)
+            VStack(spacing: 20) {
+                HStack {
+                    AsyncImage(url: trackInfo.coverUrl) { phase in
                         switch phase {
                         case .empty:
                             ProgressView()
@@ -681,85 +978,138 @@ struct SongView: View {
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .frame(width: 80, height: 80)
-                                .cornerRadius(8)
+                                .frame(width: 100, height: 100)
+                                .clipShape(Circle())
+                                .rotationEffect(.degrees(rotateDegrees)) // Apply rotation effect
+                                .animation(
+                                    Animation.linear(duration: 10)
+                                        .repeatForever(autoreverses: false),
+                                    value: rotateDegrees // Trigger animation when rotateDegrees changes
+                                )
                         case .failure:
                             Image(systemName: "photo")
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .frame(width: 50, height: 50)
-                                .cornerRadius(8)
+                                .frame(width: 100, height: 100)
+                                .clipShape(Circle())
                         @unknown default:
                             EmptyView()
                         }
                     }
-                } else {
-                    Image(systemName: "photo")
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 50, height: 50)
-                        .cornerRadius(8)
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(trackInfo.name)
-                        .font(.headline)
-                    Text(trackInfo.artist)
-                        .font(.subheadline)
-                }
-                Spacer()
-            }
-            
-            HStack(spacing: 20) {
-                if trackInfo.previewUrl != nil {
-                    Button(action: {
-                        if isPlayingPreview {
-                            // Pause preview if already playing
-                            viewModel.audioPlayer?.pause()
-                        } else {
-                            // Play preview if not playing
-                            viewModel.playTrackPreview()
-                        }
-                        isPlayingPreview.toggle()
-                    }) {
-                        Image(systemName: isPlayingPreview ? "pause.circle.fill" : "play.circle.fill")
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(trackInfo.name)
                             .font(.title)
-                            .foregroundColor(.blue)
+                            .fontWeight(.bold)
+                        Text(trackInfo.artist)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal)
+                
+                HStack(spacing: 30) {
+                    if trackInfo.previewUrl != nil {
+                        Button(action: {
+                            if isPlayingPreview {
+                                viewModel.audioPlayer?.pause()
+                            } else {
+                                viewModel.playTrackPreview()
+                            }
+                            isPlayingPreview.toggle()
+                        }) {
+                            Image(systemName: isPlayingPreview ? "pause.circle.fill" : "play.circle.fill")
+                                .font(.largeTitle)
+                                .foregroundColor(.blue)
+                        }
                     }
                     
-                    .padding(8)
-                    .background(Color.white)
-                    .clipShape(Circle())
-                    .shadow(radius: 2)
+                    Button(action: {
+                        if submitting {
+                            return
+                        }
+                        submitting = true
+                        submitSong(trackInfo: trackInfo)
+                    }) {
+                        Text(submissionCompleted ? "Submitted!" : alreadySubmitted ? "Already Submitted" : "Submit Song")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 20)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(alreadySubmitted ? Color.red : submissionCompleted ? Color.green : Color.blue)
+                            )
+                    }
+                    .disabled(submissionCompleted || alreadySubmitted)
                 }
+                .padding(.horizontal)
                 
                 Button(action: {
-                    if submitting {
-                        return
+                    // Extract the track ID from the full URI
+                    let components = trackInfo.URI.split(separator: ":")
+                    if components.count > 2, components[1] == "track" {
+                        let trackID = String(components[2])
+                        let spotifyUri = "spotify:track:\(trackID)"
+                        let spotifyWebUrl = "https://open.spotify.com/track/\(trackID)"
+                        
+                        if let url = URL(string: spotifyUri), UIApplication.shared.canOpenURL(url) {
+                            UIApplication.shared.open(url)
+                        } else if let url = URL(string: spotifyWebUrl) {
+                            UIApplication.shared.open(url)
+                        }
                     }
-                    submitting = true
-                    // Submit song
-                    submitSong(trackInfo: trackInfo)
                 }) {
-                    Text(submissionCompleted ? "Submitted!" : alreadySubmitted ? "Already Submitted" : "Submit Song")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(alreadySubmitted ? Color.red : submissionCompleted ? Color.green : Color.blue)
-                                .shadow(color: Color.gray.opacity(0.5), radius: 10, x: 0, y: 5)
-                        )
+                    HStack {
+                        Image("spotifylogo") // Use your Spotify logo image here
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 20, height: 20) // Adjust size as needed
+                            .padding(.leading, 10)
+                        
+                        Text("Listen on Spotify")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.trailing, 10)
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color.blue)
+                            .shadow(color: Color.gray.opacity(0.4), radius: 10, x: 0, y: 5)
+                    )
                 }
-                .disabled(submissionCompleted || alreadySubmitted) // Disable button if submission completed or already submitted
             }
         }
+        .cornerRadius(20)
+        .shadow(color: Color.gray.opacity(0.4), radius: 10, x: 0, y: 5)
         .padding()
-        .background(Color.gray.opacity(0.2))
-        .cornerRadius(10)
-        .shadow(color: Color.gray.opacity(0.4), radius: 5, x: 0, y: 2)
+        .onAppear {
+            // Start spinning animation
+            startSpinning()
+        }
+        .onDisappear {
+            // Stop spinning animation when view disappears
+            timer?.invalidate()
+        }
     }
+    
+    func startSpinning() {
+        // Set up a timer to update the rotation degrees every 0.1 seconds
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            withAnimation {
+                rotateDegrees += 5
+            }
+        }
+    }
+    
+    
+    
+    
+    
+    
+    
     
     func submitSong(trackInfo: TrackInfo) {
         guard let userId = authManager.userID else {
@@ -773,9 +1123,16 @@ struct SongView: View {
         }
         
         let db = Firestore.firestore()
-        let dailySubmissionsRef = db.collection("dailySubmissions")
         
-        // Check if any document in dailySubmissions collection has the same URI as the song being submitted
+        // Create a date string for today's date (e.g., "2024-09-18")
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let todayDate = dateFormatter.string(from: Date())
+        
+        // Reference to the dailySubmissions collection under today's date folder
+        let dailySubmissionsRef = db.collection("dailySubmissions").document(todayDate).collection("submissions")
+        
+        // Check if any document in today's submissions has the same URI as the song being submitted
         dailySubmissionsRef.whereField("uri", isEqualTo: trackInfo.URI).getDocuments { (snapshot, error) in
             if let error = error {
                 print("Error fetching submissions: \(error.localizedDescription)")
@@ -785,7 +1142,6 @@ struct SongView: View {
             if let documents = snapshot?.documents, !documents.isEmpty {
                 // A submission with the same URI exists, indicating the song has already been submitted
                 print("Song already submitted by someone else.")
-                // You can handle this case by showing an alert to the user or updating UI accordingly
                 alreadySubmitted = true
                 submitting = false
                 return
@@ -804,26 +1160,17 @@ struct SongView: View {
                     return
                 }
                 
-                // Reference to your Firebase database
-                let db = Firestore.firestore()
-                
-                // Reference to the user's document
-                let userRef = db.collection("users").document(userId)
-                
-                // Reference to the dailySubmissions collection
-                let dailySubmissionsRef = db.collection("dailySubmissions")
-                
-                // Add a new document to dailySubmissions collection
+                // Add a new document to today's submissions collection
                 let newSubmissionDocument = dailySubmissionsRef.document()
                 
                 // Data to be set in the new submission document
                 let submissionData: [String: Any] = [
                     "submission": jsonString,
-                    "score": 0,
+                    "score": 1,
                     "timestamp": FieldValue.serverTimestamp(),
                     "userPosted": userId,
-                    "username" : user.username,
-                    "uri" : trackInfo.URI
+                    "username": user.username,
+                    "uri": trackInfo.URI
                 ]
                 
                 // Set the data in the new submission document
@@ -836,6 +1183,7 @@ struct SongView: View {
                     print("New submission created with ID: \(newSubmissionDocument.documentID)")
                     
                     // Update the user's document with a reference to the new submission document
+                    let userRef = db.collection("users").document(userId)
                     userRef.updateData([
                         "submittedTracks": FieldValue.arrayUnion([newSubmissionDocument.documentID])
                     ]) { error in
@@ -846,7 +1194,7 @@ struct SongView: View {
                         }
                     }
                     
-                    // Now you can dismiss the view or perform any other actions
+                    // Mark submission as completed
                     submissionCompleted = true
                     submitting = false
                     print("Submission process completed successfully")
@@ -857,3 +1205,8 @@ struct SongView: View {
         }
     }
 }
+
+
+
+
+

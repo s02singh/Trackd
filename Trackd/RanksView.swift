@@ -20,6 +20,9 @@ struct RanksView: View {
     @State var isPlaying: Bool = false
     @State var loadingTheme: Bool = true
     @State var fetching: Bool = false
+    @State var displaying: Bool = false
+    @State private var selectedUsername: String? = nil
+    
 
     var body: some View {
         VStack {
@@ -57,21 +60,25 @@ struct RanksView: View {
                 Spacer()
             }
             else{
-                List(trackDisplays.indices, id: \.self) { index in
-                    TrackRow(trackDisplay: trackDisplays[index], upvoteAction: {
-                        upvoteTrack(index: index)
-                    }, downvoteAction: {
-                        downvoteTrack(index: index)
+                
+                if(displaying){
+                    List(trackDisplays.indices, id: \.self) { index in
+                        TrackRow(trackDisplay: trackDisplays[index], upvoteAction: {
+                            upvoteTrack(index: index)
+                        }, downvoteAction: {
+                            downvoteTrack(index: index)
+                        }
+                                 , isPlaying: $isPlaying
+                                 , lastPlayed: $lastPlayed
+                                 , trackDisplays: $trackDisplays
+                                 
+                        )
+                        .environmentObject(authManager)
+                        .environmentObject(spotifyManager)
                     }
-                             , isPlaying: $isPlaying
-                             , lastPlayed: $lastPlayed
-                             , trackDisplays: $trackDisplays
-                             
-                    )
-                    .environmentObject(authManager)
-                    .environmentObject(spotifyManager)
                 }
             }
+            Spacer()
         }
         .onAppear {
             fetchTracks() // Fetch tracks initially
@@ -79,8 +86,13 @@ struct RanksView: View {
     }
 
     func fetchTracks() {
-            let collection = Firestore.firestore().collection("dailySubmissions")
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let todayDate = dateFormatter.string(from: Date())
+        let collection = Firestore.firestore().collection("dailySubmissions").document(todayDate).collection("submissions")
             var query: Query
+            displaying = false
+            fetching = true
 
             if selection == 0 {
                 // Trending: Query based on score, descending
@@ -122,14 +134,20 @@ struct RanksView: View {
                             _ = authManager.userID ?? ""
                             let userVotes = document.data()["userVotes"] as? [String: Int] ?? [:]
 
+                            fetching = false
+                            displaying = true
                             return TrackDisplay(trackInfo: trackInfo, documentID: document.documentID, userVotes: userVotes, userPosted: userPosted, username: username)
                         }
                     } catch {
                         print("Error parsing track: \(error)")
                     }
+                    print("here")
+                    fetching = false
+
                     return nil
                 }
             }
+        fetching = false
         }
 
 
@@ -172,6 +190,7 @@ struct TrackRow: View {
     @Binding var lastPlayed: String
     @Binding var trackDisplays: [TrackDisplay]
     @State var playIcon: Bool = false
+    @State private var showUserSheet = false
 
     
     var body: some View {
@@ -247,9 +266,21 @@ struct TrackRow: View {
                     .buttonStyle(BorderlessButtonStyle())
                     .foregroundColor(isDownvoted ? .red : .primary) // Set color based on downvote state
                 }
-                Text("Submitted by: \(trackDisplay.username)")
-                    .foregroundColor(Color.green) // Display in green color
-                    .font(.subheadline)
+                Button(action: {
+                    showUserSheet = true // Trigger the sheet to open
+                }) {
+                    Text("Submitted by: \(trackDisplay.username)")
+                        .foregroundColor(.green) // Blue indicates it's clickable
+                        .underline()
+                        .font(.subheadline)
+                }
+                .buttonStyle(BorderlessButtonStyle())
+                .sheet(isPresented: $showUserSheet) {
+                    // Display UserView in a sheet
+                    UserView(username: trackDisplay.username)
+                        .environmentObject(authManager)
+                }
+            
             }
 
             Spacer()
@@ -263,6 +294,7 @@ struct TrackRow: View {
                         .font(.system(size: 24))
                         .foregroundColor(.blue)
                 }
+                .buttonStyle(BorderlessButtonStyle())
                 .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { _ in
                     // Preview ended, set isPlayingPreview to false
                     isPlayingPreview = false
@@ -274,6 +306,29 @@ struct TrackRow: View {
                     }
                 }
             }
+            Button(action: {
+                // Extract the track ID from the full URI
+          
+                let components = trackDisplay.trackInfo.URI.split(separator: ":")
+                if components.count > 2, components[1] == "track" {
+                    let trackID = String(components[2])
+                    let spotifyUri = "spotify:track:\(trackID)"
+                    let spotifyWebUrl = "https://open.spotify.com/track/\(trackID)"
+                    
+                    if let url = URL(string: spotifyUri), UIApplication.shared.canOpenURL(url) {
+                        UIApplication.shared.open(url)
+                    } else if let url = URL(string: spotifyWebUrl) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            }) {
+                Image("spotifylogo") // Use your Spotify logo image here
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 20, height: 20) // Adjust size as needed
+                    .padding(.leading, 10)
+            }
+            .buttonStyle(BorderlessButtonStyle())
             
         }
         .padding(.vertical, 8)
@@ -288,6 +343,7 @@ struct TrackRow: View {
                 }
             }
         }
+        
     }
 
     
@@ -336,7 +392,10 @@ extension RanksView {
 
     func updateFirestoreData(index: Int) {
         let trackDisplay = trackDisplays[index]
-        let collection = Firestore.firestore().collection("dailySubmissions")
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let todayDate = dateFormatter.string(from: Date())
+        let collection = Firestore.firestore().collection("dailySubmissions").document(todayDate).collection("submissions")
 
         let documentRef = collection.document(trackDisplay.documentID)
         documentRef.updateData([
