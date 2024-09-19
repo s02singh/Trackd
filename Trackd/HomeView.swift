@@ -791,8 +791,8 @@ struct HomeView: View {
                Image(uiImage: artist.image ?? UIImage(named: "TrackdLogo")!)
                    .resizable()
                    .frame(width: 60, height: 60)
-                   .clipShape(Circle())
                    .shadow(radius: 5)
+                   .cornerRadius(2)
                
                VStack(alignment: .leading, spacing: 5) {
                    Text(artist.name)
@@ -837,8 +837,8 @@ struct HomeView: View {
                    .resizable()
                    .scaledToFit()
                    .frame(width: 150, height: 150)
-                   .clipShape(Circle())
                    .shadow(radius: 10)
+                   .cornerRadius(6)
 
                Text(artist.name)
                    .font(.largeTitle)
@@ -856,16 +856,24 @@ struct HomeView: View {
                Button(action: {
                    openSpotifyArtist(artistId: artist.id)
                }) {
-                   Text("Open on Spotify")
-                       .font(.headline)
-                       .foregroundColor(.white)
-                       .padding()
-                       .background(
-                           Capsule()
-                               .fill(LinearGradient(gradient: Gradient(colors: [.blue, .purple]), startPoint: .leading, endPoint: .trailing))
-                       )
-                       .shadow(radius: 10)
+                   HStack{
+                       Image("spotifylogo") // Use your Spotify logo image here
+                           .resizable()
+                           .aspectRatio(contentMode: .fit)
+                           .frame(width: 20, height: 20) // Adjust size as needed
+                       
+                       
+                       Text("Open on Spotify")
+                           .font(.headline)
+                           .foregroundColor(.white)
+                           .shadow(radius: 10)
+                   }
+                   .padding()
                }
+               .background(
+                   Capsule()
+                       .fill(LinearGradient(gradient: Gradient(colors: [.blue, .purple]), startPoint: .leading, endPoint: .trailing))
+               )
            }
            .padding()
            .background(
@@ -940,7 +948,7 @@ struct SearchResultsRow: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 50, height: 50)
-                    .cornerRadius(5)
+                    .cornerRadius(2)
             }
 
             VStack(alignment: .leading) {
@@ -979,7 +987,8 @@ struct SongView: View {
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 100, height: 100)
-                                .clipShape(Circle())
+                                .cornerRadius(4)
+                                .padding()
                                 .rotationEffect(.degrees(rotateDegrees)) // Apply rotation effect
                                 .animation(
                                     Animation.linear(duration: 10)
@@ -992,6 +1001,7 @@ struct SongView: View {
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 100, height: 100)
                                 .clipShape(Circle())
+                                .padding()
                         @unknown default:
                             EmptyView()
                         }
@@ -1087,7 +1097,7 @@ struct SongView: View {
         .padding()
         .onAppear {
             // Start spinning animation
-            startSpinning()
+            //startSpinning()
         }
         .onDisappear {
             // Stop spinning animation when view disappears
